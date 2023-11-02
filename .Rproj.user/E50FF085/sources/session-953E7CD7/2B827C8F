@@ -1,0 +1,26 @@
+{
+    "id": "2B827C8F",
+    "path": "~/DifferentialExpression_Genes/R/01_DifferentialExpression_Analysis.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1698894321802.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "20,0",
+        "scrollLine": "19"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1698822939,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1698822939,
+    "read_only": false,
+    "read_only_alternatives": []
+}

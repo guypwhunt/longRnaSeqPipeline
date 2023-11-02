@@ -1,0 +1,149 @@
+# if (!requireNamespace("BiocManager", quietly = TRUE)) {
+#   install.packages("BiocManager")
+# }
+#
+# BiocManager::install(c("DESeq2", "enrichR", "biomaRt", "sva", "IHW", "apeglm"))
+#
+# install.packages(c("tidyr", "magrittr", "data.tables", "ggplot2", "ggrastr"), dependencies = TRUE)
+
+# Load required libraries
+library(DESeq2)
+library(apeglm)
+library(tidyr)
+library(magrittr)
+library(sva)
+library(IHW)
+# library(biomaRt)
+# library(enrichR)
+library(data.table)
+library(dplyr)
+
+# Define a function to set row names from a column
+column_to_rownames <- function(df) {
+  row.names(df) <- df[, 1]
+  df <- df[, -1]
+  return(df)
+}
+
+# Read the gene count data and set row names
+gene_cts <-
+  fread("data/input_gene_count/cleanedMergedErvCellular.txt",
+        header = TRUE) %>%
+  as.data.frame() %>%
+  column_to_rownames()
+
+# Read and process phenotype data
+phe <- fread("data/input_phenotype/phenotypeStarting.txt") %>%
+  as.data.frame() %>%
+  mutate(Status = factor(Status, levels = c(1, 2)),
+         Sex = factor(Sex, levels = c(1, 2)),
+         Age = scale(Age),
+         PMD = scale(PMD),
+         RIN = scale(RIN),
+         astrocytes = scale(astrocytes),
+         neurons = scale(neurons),
+         microglia = scale(microglia),
+         endothelial = scale(endothelial),
+         oligodendrocytes = scale(oligodendrocytes)) %>%
+  filter(V1 %in% colnames(gene_cts)) %>%
+  column_to_rownames()
+
+# Subset gene counts to match phenotype data
+gene_cts <- gene_cts[, row.names(phe)]
+
+# Define the formula for DESeq2 analysis
+formula <-
+  as.formula("~ Sex + Age + PMD + RIN + neurons + microglia + endothelial + oligodendrocytes + Status")
+
+# Create a DESeqDataSet
+dds_genes <- DESeqDataSetFromMatrix(countData = gene_cts,
+                                    colData = phe,
+                                    design = formula)
+
+# Estimate size factors
+dds_genes <- estimateSizeFactors(dds_genes)
+
+# Filter low-abundance genes
+idx <- rowSums(counts(dds_genes, normalized = TRUE) >= 5) >= 10
+dds_genes <- dds_genes[idx, ]
+
+# Extract normalized counts and further filter low-abundance genes
+dat <- counts(dds_genes, normalized = TRUE)
+idx <- rowMeans(dat) > 1
+dat <- dat[unname(idx), ]
+
+# Create design matrices
+mod <- model.matrix(formula, colData(dds_genes))
+mod0 <- model.matrix(~ 1, colData(dds_genes))
+
+# Estimate the number of surrogate variables
+nsv <- num.sv(dat, mod)
+
+# Perform surrogate variable analysis
+svseq <- svaseq(dat, mod, mod0, n.sv = nsv)
+dds_genes$SV1 <- scale(svseq$sv)
+
+# Update the formula to include SV1
+formula <-
+  as.formula("~ Sex + Age + PMD + RIN + neurons + microglia + endothelial + oligodendrocytes + SV1 + Status")
+design(dds_genes) <- formula
+
+# Run DESeq2 analysis
+dds_genes <- DESeq(dds_genes)
+results(dds_genes)
+
+# Shrink log fold change
+lfc_dds_genes <-
+  lfcShrink(dds_genes, coef = length(resultsNames(dds_genes)), type = "apeglm")
+
+# Perform Independent Hypothesis Weighting
+resIHW <- results(dds_genes, filterFun = ihw)
+lfc_dds_genes$padj <- resIHW$padj
+lfc_resIHW <- lfc_dds_genes
+
+# Order the results by p-value
+resIHWOrdered <- resIHW[order(resIHW$pvalue), ]
+lfc_resIHWOrdered <- lfc_resIHW[order(lfc_resIHW$pvalue), ]
+
+# Extract rows with numeric row names
+numeric_rows <-
+  resIHWOrdered[!grepl("^ENSG", row.names(resIHWOrdered)),]
+lfc_numeric_rows <-
+  lfc_resIHWOrdered[!grepl("^ENSG", row.names(lfc_resIHWOrdered)),]
+
+# Create output directory
+outputDirectory <- "data/output_differential_results/"
+dir.create(outputDirectory,
+           recursive = TRUE,
+           showWarnings = FALSE)
+
+# Save results
+fwrite(
+  as.data.frame(resIHWOrdered),
+  file = paste0(outputDirectory, "differential_results_including_genes.csv"),
+  row.names = TRUE
+)
+
+fwrite(
+  as.data.frame(lfc_resIHWOrdered),
+  file = paste0(
+    outputDirectory,
+    "lfc_shrunk_differential_results_including_genes.csv"
+  ),
+  row.names = TRUE
+)
+
+fwrite(
+  as.data.frame(numeric_rows),
+  file = paste0(outputDirectory, "differential_results_excluding_genes.csv"),
+  row.names = TRUE
+)
+
+fwrite(
+  as.data.frame(lfc_numeric_rows),
+  file = paste0(
+    outputDirectory,
+    "lfc_shrunk_differential_results_excluding_genes.csv"
+  ),
+  row.names = TRUE
+)
