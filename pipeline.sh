@@ -40,10 +40,10 @@ cd /scratch/prj/sgdp_nanopore/Projects/09_structural_variant_benchmarking_datase
 # > fastq_split/$p.gz
 #done < barcodes.txt
 
-while read p; do
-  echo "$p"
-  cat /scratch/prj/sgdp_nanopore/Projects/BR22_00024_ALS_Liverpool_RNA_seq/1-7/20230504_1318_1C_PAK60199_b6ada2b6/fastq_pass/$p/* \
-  > fastq_split/$p.gz
-done < barcodes.txt
+#while read p; do
+#  echo "$p"
+#  cat /scratch/prj/sgdp_nanopore/Projects/BR22_00024_ALS_Liverpool_RNA_seq/1-7/20230504_1318_1C_PAK60199_b6ada2b6/fastq_pass/$p/* \
+#  > fastq_split/$p.gz
+#done < barcodes.txt
 
-nextflow run rnaseq.nf
+nextflow run rnaseq.nf -resume

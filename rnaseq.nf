@@ -46,20 +46,27 @@ process nanofilt {
   path query_file from split_fastq
 
   output:
-  file "${query_file}.filtered"  into filter
+  file "${query_file}.filtered.fastq.gz"  into filter
 
   script:
   """
-  gunzip -c ${query_file} | NanoFilt -l 500 --headcrop 10 | gzip - > ${query_file}.filtered
+  gunzip -c ${query_file} | NanoFilt -l 500 --headcrop 10 | gzip - > ${query_file}.filtered.fastq.gz
   """
 }
+
+filter.into {
+  filter1
+  filter2
+  filter3
+}
+
 
 process fastqcPostNanoFilt {
 
   publishDir 'alignment_output/fastqcPostNanoFilt/', mode: 'copy'
 
   input:
-  path query_file from filter
+  path query_file from filter1
 
   output:
   path "*"
@@ -71,13 +78,29 @@ process fastqcPostNanoFilt {
   """
 }
 
+process nanoplotPostNanoFilt {
+
+  publishDir 'alignment_output/nanoplotPostNanoFilt/', mode: 'copy'
+
+  input:
+  path query_file from filter2
+
+  output:
+  path "${query_file}_*"
+
+  script:
+  """
+  NanoPlot --fastq ${query_file} -o ${query_file}_*
+  """
+}
+
 
 process aligAndconvert {
 
   publishDir 'alignment_output/'
 
   input:
-  path query_file from filter
+  path query_file from filter3
 
   output:
   file "${query_file}.bam" into genomes
@@ -239,3 +262,23 @@ process count_transcripts {
   /scratch/prj/sgdp_nanopore/software/subread-2.0.3-source/bin/featureCounts -L -O -f --primary -F GTF -g transcript_id -t transcript --extraAttributes gene_id -a ${merged} -o barcode_counts_transcript.txt ${query_file}
   """
 }
+
+process normalise_count_transcripts {
+
+  publishDir 'alignment_output/count_transcripts'
+
+  input:
+  file count_transcript from count_transcripts
+
+  output:
+  file "normalized_counts_transcript.csv" into count_transcripts
+
+  script:
+  """
+  Rscript R/normalise_count_transcripts.R
+  """
+}
+
+
+
+
